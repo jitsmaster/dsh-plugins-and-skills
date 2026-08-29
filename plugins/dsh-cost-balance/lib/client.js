@@ -28,6 +28,8 @@ window.__ModuleLoader__.load({
       '.cbSbi_glow .cbSbi_dot{box-shadow:0 0 9px 2px rgba(229,72,77,.85);animation:cbSbiPulse 1.6s ease-in-out infinite}' +
       '@keyframes cbSbiPulse{0%,100%{box-shadow:0 0 4px 1px rgba(229,72,77,.5)}50%{box-shadow:0 0 11px 3px rgba(229,72,77,.95)}}' +
       '.cbSbi_val{font-weight:600;color:inherit}' +
+      '.cbSbi_offdot{width:9px;height:9px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 45%,transparent);flex:none}' +
+      '.cbSbi_hidden{color:var(--dsw-alias-label-tertiary)}' +
       '.cbPill_toggle{font-size:12px;line-height:18px;padding:1px 10px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:color-mix(in srgb,var(--dsw-alias-label-secondary) 12%,transparent);color:var(--dsw-alias-label-primary);cursor:pointer}' +
       '.cbPill_toggle[aria-pressed="true"]{border-color:#30a46c;color:#30a46c}'
     const CSS_TAG = 'dsh-cost-balance/stats'
@@ -202,7 +204,22 @@ window.__ModuleLoader__.load({
         return () => window.clearInterval(timer)
       }, [refresh])
 
-      if (!on) return null
+      // Always render SOMETHING so the indicator is always recoverable from the
+      // sidebar: when toggled off we show a dim restore dot; clicking it turns
+      // the full indicator back on. (The old code returned null when off, which
+      // hid it forever unless the user found the composer-panel toggle.)
+      if (!on) {
+        return React.createElement('button', {
+          type: 'button',
+          className: 'cbSbi cbSbi_hidden',
+          title: 'dsh-cost-balance 已隐藏（点击恢复本会话侧栏指示）',
+          'aria-label': '恢复 dsh-cost-balance 侧栏指示',
+          onClick: () => { writeSidebarPref(keyId, true); setOn(true) },
+        }, [
+          React.createElement('span', { className: 'cbSbi_offdot', key: 'dot' }),
+          props.wide ? React.createElement('span', { key: 'txt' }, ' 恢复') : null,
+        ])
+      }
 
       const peak = readout !== null && readout.peak === true
       const balance = readout !== null && readout.balance !== null
