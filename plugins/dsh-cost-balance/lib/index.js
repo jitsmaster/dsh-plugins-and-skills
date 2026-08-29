@@ -114,7 +114,7 @@ export function apply(ctx, config = {}) {
       }
       const { cost, model } = computeCost(usage)
       const balance = await fetchBalance(force)
-      sendJson(res, 200, { cost, model, peak: isPeakHours(new Date(), peakWindows), balance })
+      sendJson(res, 200, { cost, model, peak: isPeakHours(new Date(), peakWindows), peakWindows, balance })
     },
   }))
 }

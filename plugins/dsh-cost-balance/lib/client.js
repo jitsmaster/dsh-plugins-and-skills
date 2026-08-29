@@ -20,6 +20,7 @@ window.__ModuleLoader__.load({
       '.cbPill_value{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);font-weight:500;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.cbPill_hint{color:var(--dsw-alias-label-caption);text-align:center;margin-top:4px}' +
       '.cbSbi{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;width:100%;min-height:34px;padding:4px 10px;font-size:12px;line-height:16px;border:none;cursor:pointer;background:transparent;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums;white-space:nowrap}' +
+      '.cbSbiWrap{position:relative;width:100%}' +
       '.cbSbi:hover{background:color-mix(in srgb,var(--dsw-alias-label-secondary) 9%,transparent)}' +
       '.cbSbi_dot{width:8px;height:8px;border-radius:999px;flex:none}' +
       '.cbSbi_peak .cbSbi_dot{background:#e5484d}' +
@@ -28,10 +29,10 @@ window.__ModuleLoader__.load({
       '.cbSbi_glow .cbSbi_dot{box-shadow:0 0 9px 2px rgba(229,72,77,.85);animation:cbSbiPulse 1.6s ease-in-out infinite}' +
       '@keyframes cbSbiPulse{0%,100%{box-shadow:0 0 4px 1px rgba(229,72,77,.5)}50%{box-shadow:0 0 11px 3px rgba(229,72,77,.95)}}' +
       '.cbSbi_val{font-weight:600;color:inherit}' +
-      '.cbSbi_offdot{width:9px;height:9px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 45%,transparent);flex:none}' +
-      '.cbSbi_hidden{color:var(--dsw-alias-label-tertiary)}' +
-      '.cbPill_toggle{font-size:12px;line-height:18px;padding:1px 10px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:color-mix(in srgb,var(--dsw-alias-label-secondary) 12%,transparent);color:var(--dsw-alias-label-primary);cursor:pointer}' +
-      '.cbPill_toggle[aria-pressed="true"]{border-color:#30a46c;color:#30a46c}'
+      '.cbSbi_pop{position:absolute;bottom:calc(100% + 12px);left:0;z-index:60;box-sizing:border-box;min-width:220px;background:color-mix(in srgb,var(--dsw-specific-menu) 88%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;box-shadow:var(--dsw-shadow-lv3);padding:10px 14px;font-size:12px;line-height:20px;text-align:left}' +
+      '.cbSbi_popRow{display:flex;justify-content:space-between;align-items:center;gap:12px}' +
+      '.cbSbi_popLabel{color:var(--dsw-alias-label-tertiary)}' +
+      '.cbSbi_popVal{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);font-weight:600;text-align:right}'
     const CSS_TAG = 'dsh-cost-balance/stats'
     if (typeof document !== 'undefined' && document.querySelector('style[data-plugin-css="' + CSS_TAG + '"]') === null) {
       const tag = document.createElement('style')
@@ -134,29 +135,7 @@ window.__ModuleLoader__.load({
     }
 
     // —— 侧栏指示器（sidebar.footer.action）——
-    // 每个会话独立开关，localStorage 键名含会话 id；关闭时渲染 null，需在统计面板里重新打开。
-    function sidebarPrefKey(sessionId) {
-      return 'dsh-cost-balance.sidebar.' + sessionId
-    }
-    function readSidebarPref(sessionId) {
-      try {
-        const v = window.localStorage.getItem(sidebarPrefKey(sessionId))
-        return v === null ? true : v === '1'
-      } catch {
-        return true
-      }
-    }
-    function writeSidebarPref(sessionId, value) {
-      try {
-        window.localStorage.setItem(sidebarPrefKey(sessionId), value ? '1' : '0')
-        // 同标签页 localStorage 变更不触发 storage 事件，手动广播让侧栏即时响应。
-        window.dispatchEvent(new CustomEvent('dsh-cost-balance:sidebar', {
-          detail: { sessionId, value },
-        }))
-      } catch {
-        // localStorage 不可用时静默降级
-      }
-    }
+    // 始终显示；点击弹出面板展示当前余额与下一档（高峰/谷时）开始时间（本地时区）。
 
     // 空 usage 只取余额与峰谷标记（花费字段无意义，忽略）。
     function fetchBalanceOnly() {
@@ -165,27 +144,39 @@ window.__ModuleLoader__.load({
       }).then((r) => r.json())
     }
 
-    function SidebarIndicator(props) {
-      // The sidebar footer action is root-scoped: `state.current` may be
-      // undefined (no active session binding at that scope). Never let that
-      // hide the indicator — fall back to a workspace-level key so it always
-      // renders above Settings.
-      const sessionId = props.useSessions((s) => s.current)
-      const keyId = sessionId === undefined ? 'workspace' : sessionId
-      const [on, setOn] = React.useState(() => readSidebarPref(keyId))
-      const [readout, setReadout] = React.useState(null)
-      // 会话切换时刷新开关状态
-      React.useEffect(() => {
-        setOn(readSidebarPref(keyId))
-      }, [keyId])
-      // 面板里的开关切换后即时同步
-      React.useEffect(() => {
-        const handler = (e) => {
-          if (e.detail.sessionId === keyId) setOn(e.detail.value)
+    // 从 peakWindows（UTC 小时，如 [[1,4],[6,10]]）计算下一个档位切换时刻（UTC）。
+    // 返回 { time: Date, kind: 'peak' | 'valley' }，time 为 UTC 时刻；展示时用本地时区格式化。
+    function nextTransition(now, windows) {
+      const candidates = []
+      for (let day = 0; day <= 2; day += 1) {
+        for (const [start, end] of windows) {
+          const ps = new Date(now)
+          ps.setUTCDate(ps.getUTCDate() + day)
+          ps.setUTCHours(start, 0, 0, 0)
+          const pe = new Date(now)
+          pe.setUTCDate(pe.getUTCDate() + day)
+          pe.setUTCHours(end, 0, 0, 0)
+          if (ps.getTime() > now.getTime()) candidates.push({ time: ps, kind: 'peak' })
+          if (pe.getTime() > now.getTime()) candidates.push({ time: pe, kind: 'valley' })
         }
-        window.addEventListener('dsh-cost-balance:sidebar', handler)
-        return () => window.removeEventListener('dsh-cost-balance:sidebar', handler)
-      }, [keyId])
+      }
+      candidates.sort((a, b) => a.time.getTime() - b.time.getTime())
+      return candidates[0]
+    }
+
+    // 用本地时区格式化一个 UTC Date（非北京时间——toLocaleString 按浏览器时区）。
+    function formatLocalTime(d) {
+      if (d === null || d === undefined) return '--'
+      try {
+        return d.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      } catch {
+        return String(d)
+      }
+    }
+
+    function SidebarIndicator(props) {
+      const [open, setOpen] = React.useState(false)
+      const [readout, setReadout] = React.useState(null)
       const refresh = React.useCallback(() => {
         fetchBalanceOnly().then((result) => {
           setReadout(result !== null && typeof result === 'object' ? result : null)
@@ -200,26 +191,9 @@ window.__ModuleLoader__.load({
       // `ctx` is not in scope inside this component (only inside apply), so
       // the previous ctx.interval(...) threw and crashed the slot entry.
       React.useEffect(() => {
-        const timer = window.setInterval(() => refresh(), 60000)
+        const timer = window.setInterval(() => refresh(), 15 * 60 * 1000)
         return () => window.clearInterval(timer)
       }, [refresh])
-
-      // Always render SOMETHING so the indicator is always recoverable from the
-      // sidebar: when toggled off we show a dim restore dot; clicking it turns
-      // the full indicator back on. (The old code returned null when off, which
-      // hid it forever unless the user found the composer-panel toggle.)
-      if (!on) {
-        return React.createElement('button', {
-          type: 'button',
-          className: 'cbSbi cbSbi_hidden',
-          title: 'dsh-cost-balance 已隐藏（点击恢复本会话侧栏指示）',
-          'aria-label': '恢复 dsh-cost-balance 侧栏指示',
-          onClick: () => { writeSidebarPref(keyId, true); setOn(true) },
-        }, [
-          React.createElement('span', { className: 'cbSbi_offdot', key: 'dot' }),
-          props.wide ? React.createElement('span', { key: 'txt' }, ' 恢复') : null,
-        ])
-      }
 
       const peak = readout !== null && readout.peak === true
       const balance = readout !== null && readout.balance !== null
@@ -231,21 +205,40 @@ window.__ModuleLoader__.load({
       const glow = peak || low
       const label = peak ? '高峰' : '谷时'
       const cls = 'cbSbi' + (peak ? ' cbSbi_peak' : ' cbSbi_off') + (glow ? ' cbSbi_glow' : '')
-      const text = peak ? '高峰' : '谷时'
       const balanceText = balance !== null ? currencySymbol(balance.currency) + balance.balance : '--'
 
-      return React.createElement('button', {
-        type: 'button',
-        className: cls,
-        title: (glow ? '⚠ ' : '') + text + ' · 余额 ' + balanceText + '（点击隐藏本会话侧栏指示）',
-        onClick: () => { writeSidebarPref(keyId, false); setOn(false) },
-      }, [
-        React.createElement('span', { className: 'cbSbi_dot', key: 'dot' }),
-        props.wide
-          ? React.createElement('span', { key: 'txt' }, [
-              React.createElement('span', { key: 'label' }, label),
-              React.createElement('span', { className: 'cbSbi_val', key: 'val' }, ' ' + balanceText),
-            ])
+      // 下一档切换：当前为高峰则下一档是谷时，否则下一档是高峰。
+      const windows = readout !== null && Array.isArray(readout.peakWindows) ? readout.peakWindows : null
+      const next = windows === null ? null : nextTransition(new Date(), windows)
+
+      const popRows = []
+      popRows.push(['当前', label])
+      popRows.push(['余额', balanceText])
+      popRows.push(['下一档', next === null ? '--' : (next.kind === 'peak' ? '高峰 ' : '谷时 ') + formatLocalTime(next.time)])
+
+      return React.createElement('div', { className: 'cbSbiWrap' }, [
+        React.createElement('button', {
+          type: 'button',
+          key: 'btn',
+          className: cls,
+          title: (glow ? '⚠ ' : '') + label + ' · 余额 ' + balanceText + '（点击查看高峰时间）',
+          'aria-expanded': open,
+          onClick: () => setOpen(!open),
+        }, [
+          React.createElement('span', { className: 'cbSbi_dot', key: 'dot' }),
+          props.wide
+            ? React.createElement('span', { key: 'txt' }, [
+                React.createElement('span', { key: 'label' }, label),
+                React.createElement('span', { className: 'cbSbi_val', key: 'val' }, ' ' + balanceText),
+              ])
+            : null,
+        ]),
+        open
+          ? React.createElement('div', { className: 'cbSbi_pop', key: 'pop' },
+            popRows.map((row, i) => React.createElement('div', { className: 'cbSbi_popRow', key: i }, [
+              React.createElement('span', { className: 'cbSbi_popLabel', key: 'l' }, row[0]),
+              React.createElement('span', { className: 'cbSbi_popVal', key: 'v' }, row[1]),
+            ])))
           : null,
       ])
     }
@@ -257,7 +250,6 @@ window.__ModuleLoader__.load({
       const stats = React.useMemo(() => projected ?? deriveStats(settledNodes), [projected, settledNodes])
       const [open, setOpen] = React.useState(false)
       const [readout, setReadout] = React.useState(null)
-      const sessionId = props.sessionId
       const usageKey = usage === void 0
         ? ''
         : [usage.uncachedInputTokens, usage.cacheReadTokens, usage.cacheWriteTokens, usage.outputTokens].join(',')
@@ -273,7 +265,7 @@ window.__ModuleLoader__.load({
         refresh()
       }, [refresh])
       React.useEffect(() => {
-        const timer = window.setInterval(() => refresh(), 60000)
+        const timer = window.setInterval(() => refresh(), 15 * 60 * 1000)
         return () => window.clearInterval(timer)
       }, [refresh])
 
@@ -308,22 +300,6 @@ window.__ModuleLoader__.load({
                 React.createElement('span', { className: 'cbPill_label', key: 'l' }, row[0]),
                 React.createElement('span', { className: 'cbPill_value', key: 'v' }, row[1]),
               ])),
-            sessionId !== undefined
-              ? React.createElement('div', { className: 'cbPill_row', key: 'sidebar-toggle' }, [
-                React.createElement('span', { className: 'cbPill_label', key: 'l' }, '侧栏指示'),
-                React.createElement('button', {
-                  type: 'button',
-                  key: 't',
-                  className: 'cbPill_toggle',
-                  'aria-pressed': readSidebarPref(sessionId),
-                  onClick: () => {
-                    writeSidebarPref(sessionId, !readSidebarPref(sessionId))
-                    // 触达宿主重渲染以同步侧栏状态
-                    setReadout((r) => (r === null ? null : { ...r }))
-                  },
-                }, readSidebarPref(sessionId) ? '开' : '关'),
-              ])
-              : null,
           ])
           : null,
         React.createElement('button', {
