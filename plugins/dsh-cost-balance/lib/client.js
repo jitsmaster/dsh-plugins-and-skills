@@ -144,31 +144,50 @@ window.__ModuleLoader__.load({
       }).then((r) => r.json())
     }
 
-    // 从 peakWindows（UTC 小时，如 [[1,4],[6,10]]）计算下一个档位切换时刻（UTC）。
-    // 返回 { time: Date, kind: 'peak' | 'valley' }，time 为 UTC 时刻；展示时用本地时区格式化。
-    function nextTransition(now, windows) {
-      const candidates = []
-      for (let day = 0; day <= 2; day += 1) {
-        for (const [start, end] of windows) {
-          const ps = new Date(now)
-          ps.setUTCDate(ps.getUTCDate() + day)
-          ps.setUTCHours(start, 0, 0, 0)
-          const pe = new Date(now)
-          pe.setUTCDate(pe.getUTCDate() + day)
-          pe.setUTCHours(end, 0, 0, 0)
-          if (ps.getTime() > now.getTime()) candidates.push({ time: ps, kind: 'peak' })
-          if (pe.getTime() > now.getTime()) candidates.push({ time: pe, kind: 'valley' })
+    // 判断给定时刻（UTC）是否处于高峰计费时段。周末（北京周六/周日）全天谷时；
+    // 工作日按 UTC 小时窗口（peakWindows）判断。与 Host 的 isPeakHours 保持一致。
+    function beijingDayOfWeek(now) {
+      return new Date(now.getTime() + 8 * 3600 * 1000).getUTCDay() // 0=周日 … 6=周六
+    }
+    function isPeakHours(now, windows, weekendValley) {
+      if (weekendValley) {
+        const day = beijingDayOfWeek(now)
+        if (day === 0 || day === 6) return false
+      }
+      const h = now.getUTCHours()
+      return windows.some(([start, end]) => h >= start && h < end)
+    }
+
+    // 从 peakWindows（UTC 小时，如 [[1,4],[6,10]]）与 weekendValley 计算下一个档位切换时刻（UTC）。
+    // 返回 { time: Date, kind: 'peak' | 'valley' }。周末全天谷时，因此下一档可能落在周末边界上。
+    // 用 1 分钟步长向前扫描（上限 8 天），找到第一个峰谷状态翻转的时刻，保证跨周末正确。
+    function nextTransition(now, windows, weekendValley) {
+      const startPeak = isPeakHours(now, windows, weekendValley)
+      const stepMs = 60 * 1000
+      const maxMs = 8 * 24 * 60 * 60 * 1000
+      let t = now.getTime()
+      const end = now.getTime() + maxMs
+      for (t += stepMs; t <= end; t += stepMs) {
+        const cand = new Date(t)
+        if (isPeakHours(cand, windows, weekendValley) !== startPeak) {
+          return { time: cand, kind: startPeak ? 'valley' : 'peak' }
         }
       }
-      candidates.sort((a, b) => a.time.getTime() - b.time.getTime())
-      return candidates[0]
+      return undefined
     }
 
     // 用本地时区格式化一个 UTC Date（非北京时间——toLocaleString 按浏览器时区）。
+    // 含星期（本地时区），如 "周三 8/29 09:00"。
     function formatLocalTime(d) {
       if (d === null || d === undefined) return '--'
       try {
-        return d.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        return d.toLocaleString([], {
+          weekday: 'short',
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
       } catch {
         return String(d)
       }
@@ -195,7 +214,12 @@ window.__ModuleLoader__.load({
         return () => window.clearInterval(timer)
       }, [refresh])
 
-      const peak = readout !== null && readout.peak === true
+      const windows = readout !== null && Array.isArray(readout.peakWindows) ? readout.peakWindows : null
+      const weekendValley = readout !== null ? readout.weekendValley !== false : true
+      // 高峰状态优先用本地逻辑判断（周末全天谷时，跨周末正确）；无窗口时回退到服务端 peak。
+      const peak = windows !== null
+        ? isPeakHours(new Date(), windows, weekendValley)
+        : readout !== null && readout.peak === true
       const balance = readout !== null && readout.balance !== null
         && typeof readout.balance === 'object' && readout.balance.available
         ? readout.balance
@@ -207,9 +231,8 @@ window.__ModuleLoader__.load({
       const cls = 'cbSbi' + (peak ? ' cbSbi_peak' : ' cbSbi_off') + (glow ? ' cbSbi_glow' : '')
       const balanceText = balance !== null ? currencySymbol(balance.currency) + balance.balance : '--'
 
-      // 下一档切换：当前为高峰则下一档是谷时，否则下一档是高峰。
-      const windows = readout !== null && Array.isArray(readout.peakWindows) ? readout.peakWindows : null
-      const next = windows === null ? null : nextTransition(new Date(), windows)
+      // 下一档切换：当前为高峰则下一档是谷时，否则下一档是高峰。周末全天谷时，跨周末也能正确推算。
+      const next = windows === null ? null : nextTransition(new Date(), windows, weekendValley)
 
       const popRows = []
       popRows.push(['当前', label])

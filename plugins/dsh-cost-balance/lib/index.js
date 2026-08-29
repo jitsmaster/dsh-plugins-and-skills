@@ -21,12 +21,25 @@ const DEFAULT_PRICES = {
 const BALANCE_URL = 'https://api.deepseek.com/user/balance'
 
 // 峰谷计费窗口（UTC 小时，半开区间 [start, end)）。来源：DeepSeek 2026-08-16 定价变更，
-// 高峰 = UTC 01:00–04:00 与 06:00–10:00（每日 7h），off-peak 为 peak 一半。
-// 可在 profile 的 cordis.patch.yml 里用 config.peakWindows 覆盖。
+// 高峰 = UTC 01:00–04:00 与 06:00–10:00（即北京 09:00–12:00、14:00–18:00），off-peak 为 peak 一半。
+// 2026-08-23 起 DeepSeek 再调整价：周末（周六/周日）全天按谷时计费，不再分峰谷。
+// 工作日窗口可在 profile 的 cordis.patch.yml 里用 config.peakWindows 覆盖。
 const DEFAULT_PEAK_WINDOWS = [[1, 4], [6, 10]]
+// 周末是否全天谷时。2026-08-23 起 DeepSeek 规则如此；可用 config.weekendValley 覆盖（默认 true）。
+const DEFAULT_WEEKEND_VALLEY = true
 
-// 判断给定时刻是否处于高峰计费时段（UTC）。
-function isPeakHours(now, windows = DEFAULT_PEAK_WINDOWS) {
+// 判断给定时刻（UTC）对应北京时区的星期几（0=周日 … 6=周六）。
+function beijingDayOfWeek(now) {
+  return new Date(now.getTime() + 8 * 3600 * 1000).getUTCDay()
+}
+
+// 判断给定时刻是否处于高峰计费时段。周末（北京周六/周日）全天谷时；
+// 工作日按 UTC 小时窗口（peakWindows）判断。
+function isPeakHours(now, windows = DEFAULT_PEAK_WINDOWS, weekendValley = DEFAULT_WEEKEND_VALLEY) {
+  if (weekendValley) {
+    const day = beijingDayOfWeek(now)
+    if (day === 0 || day === 6) return false
+  }
   const h = now.getUTCHours()
   return windows.some(([start, end]) => h >= start && h < end)
 }
@@ -41,6 +54,7 @@ function sendJson(res, code, value) {
 export function apply(ctx, config = {}) {
   const prices = { ...DEFAULT_PRICES, ...(config.prices ?? {}) }
   const peakWindows = config.peakWindows ?? DEFAULT_PEAK_WINDOWS
+  const weekendValley = config.weekendValley ?? DEFAULT_WEEKEND_VALLEY
   let balanceCache = null
   let failureAt = 0
 
@@ -114,7 +128,14 @@ export function apply(ctx, config = {}) {
       }
       const { cost, model } = computeCost(usage)
       const balance = await fetchBalance(force)
-      sendJson(res, 200, { cost, model, peak: isPeakHours(new Date(), peakWindows), peakWindows, balance })
+      sendJson(res, 200, {
+        cost,
+        model,
+        peak: isPeakHours(new Date(), peakWindows, weekendValley),
+        peakWindows,
+        weekendValley,
+        balance,
+      })
     },
   }))
 }
