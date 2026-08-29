@@ -194,9 +194,13 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         refresh()
       }, [refresh])
-      React.useEffect(() => ctx.interval(() => {
-        refresh()
-      }, 60000), [refresh])
+      // Poll balance/peak on an interval. Use window.setInterval directly:
+      // `ctx` is not in scope inside this component (only inside apply), so
+      // the previous ctx.interval(...) threw and crashed the slot entry.
+      React.useEffect(() => {
+        const timer = window.setInterval(() => refresh(), 60000)
+        return () => window.clearInterval(timer)
+      }, [refresh])
 
       if (!on) return null
 
@@ -251,9 +255,10 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         refresh()
       }, [refresh])
-      React.useEffect(() => ctx.interval(() => {
-        refresh()
-      }, 60000), [refresh])
+      React.useEffect(() => {
+        const timer = window.setInterval(() => refresh(), 60000)
+        return () => window.clearInterval(timer)
+      }, [refresh])
 
       const rows = []
       if (stats.steps > 0) {
