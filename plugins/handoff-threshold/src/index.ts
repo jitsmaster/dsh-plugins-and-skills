@@ -139,10 +139,19 @@ export function apply(ctx: Context, config: Config): void {
       // Resolve the workspace that owns the source session so the resume
       // session is grouped under the same workspace (passing only `cwd`
       // creates an "ungrouped" session not attached to any workspace).
+      // Prefer matching by the source session's canonical cwd via
+      // `resolveByPath`: that finds the owning workspace even when the source
+      // session is not yet accounted in any workspace's `sessionIds` (which
+      // happens when the source was itself created as an ungrouped session).
       const workspaceRegistry = ctx.get('workspaceRegistry')
-      const workspace = workspaceRegistry === undefined
-        ? undefined
-        : workspaceRegistry.list().find(candidate => candidate.sessionIds.includes(session.id))
+      let workspace: Workspace | undefined
+      if (workspaceRegistry !== undefined) {
+        const byCwd = session.header.cwd === undefined
+          ? undefined
+          : await workspaceRegistry.resolveByPath(session.header.cwd)
+        workspace = byCwd
+          ?? workspaceRegistry.list().find(candidate => candidate.sessionIds.includes(session.id))
+      }
       const created = await sessionController.create(
         workspace !== undefined
           ? { workspaceId: workspace.id }
