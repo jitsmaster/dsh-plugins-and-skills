@@ -1,0 +1,22 @@
+{
+  "name": "dsh-clear-context",
+  "version": "0.1.0",
+  "description": "A /clear command that truly wipes the current session's model-visible context (whole-history surface shadow with no summary), keeping the same session alive with an empty context.",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": [
+    "src"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-commands": "*",
+    "@deepseek-ai/dsh-compaction": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-session": "*",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
