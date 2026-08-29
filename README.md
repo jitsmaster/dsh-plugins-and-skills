@@ -15,6 +15,7 @@ Cordis plugins for the dsh web profile, installed via
 | --- | --- |
 | [`handoff-threshold`](plugins/handoff-threshold) | When a session's context exceeds a token threshold (default **200k**), prompts the agent to write a handoff document, then automatically starts a **new session in the same workspace** that resumes from it. Replaces the older `handoff-on-compaction`. |
 | [`dsh-clear-context`](plugins/dsh-clear-context) | `/clear` — truly wipes a session's context (no summary, no tail). |
+| [`dsh-cost-balance`](plugins/dsh-cost-balance) | iOS-style stats bar under the composer: session cost, account balance (incl. peak/off-peak hour billing), cache hit rate, and token usage. |
 
 ### Skills (`/skills`)
 
