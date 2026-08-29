@@ -44,7 +44,7 @@ dsh plugin --profile web add dsh-cost-balance
 | deepseek-v4-flash | $0.0028 | $0.14 | $0.28 |
 | deepseek-v4-pro | $0.003625 | $0.435 | $0.87 |
 
-> DeepSeek 将于 2026-08-16 16:00 UTC 起切换峰谷计费（off-peak 为 peak 的一半）。价格变更时无需等插件更新——在 profile 的 `cordis.patch.yml` 里覆盖即可：
+> DeepSeek 峰谷计费：高峰 = 周一至周五 09:00–12:00、14:00–18:00（北京），**周六/周日全天为谷时**（2026-08-23 起）；off-peak 为 peak 的一半。价格变更时无需等插件更新——在 profile 的 `cordis.patch.yml` 里覆盖即可：
 
 ```yaml
 # ~/.dsh/profiles/<你的profile>/cordis.patch.yml
