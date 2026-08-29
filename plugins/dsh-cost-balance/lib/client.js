@@ -164,21 +164,26 @@ window.__ModuleLoader__.load({
     }
 
     function SidebarIndicator(props) {
+      // The sidebar footer action is root-scoped: `state.current` may be
+      // undefined (no active session binding at that scope). Never let that
+      // hide the indicator — fall back to a workspace-level key so it always
+      // renders above Settings.
       const sessionId = props.useSessions((s) => s.current)
-      const [on, setOn] = React.useState(() => sessionId === undefined ? true : readSidebarPref(sessionId))
+      const keyId = sessionId === undefined ? 'workspace' : sessionId
+      const [on, setOn] = React.useState(() => readSidebarPref(keyId))
       const [readout, setReadout] = React.useState(null)
       // 会话切换时刷新开关状态
       React.useEffect(() => {
-        setOn(sessionId === undefined ? true : readSidebarPref(sessionId))
-      }, [sessionId])
+        setOn(readSidebarPref(keyId))
+      }, [keyId])
       // 面板里的开关切换后即时同步
       React.useEffect(() => {
         const handler = (e) => {
-          if (e.detail.sessionId === sessionId) setOn(e.detail.value)
+          if (e.detail.sessionId === keyId) setOn(e.detail.value)
         }
         window.addEventListener('dsh-cost-balance:sidebar', handler)
         return () => window.removeEventListener('dsh-cost-balance:sidebar', handler)
-      }, [sessionId])
+      }, [keyId])
       const refresh = React.useCallback(() => {
         fetchBalanceOnly().then((result) => {
           setReadout(result !== null && typeof result === 'object' ? result : null)
@@ -193,7 +198,7 @@ window.__ModuleLoader__.load({
         refresh()
       }, 60000), [refresh])
 
-      if (!on || sessionId === undefined) return null
+      if (!on) return null
 
       const peak = readout !== null && readout.peak === true
       const balance = readout !== null && readout.balance !== null
@@ -212,7 +217,7 @@ window.__ModuleLoader__.load({
         type: 'button',
         className: cls,
         title: (glow ? '⚠ ' : '') + text + ' · 余额 ' + balanceText + '（点击隐藏本会话侧栏指示）',
-        onClick: () => { writeSidebarPref(sessionId, false); setOn(false) },
+        onClick: () => { writeSidebarPref(keyId, false); setOn(false) },
       }, [
         React.createElement('span', { className: 'cbSbi_dot', key: 'dot' }),
         props.wide
