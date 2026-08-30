@@ -2,7 +2,7 @@
  * dsh-panel-controls — browser half.
  *
  * A compact control in the sidebar foot that lets you:
- *  - Toggle the workspaces (left) area: calls the frame's `layout.toggleSidebar()`
+ *  - Toggle the workspaces (left) area: calls the frame's `ctx.layout.toggleSidebar()`
  *    so the workspaces/session list expands to fill the left panel (or collapses
  *    to the rail) — enough room to see the workspaces listing on mobile.
  *  - Resize the Files (Explorer) width via -/+ (writes the
@@ -14,7 +14,7 @@ import React from 'react'
 
 export const name = 'dsh-panel-controls'
 
-export const inject = ['slots']
+export const inject = ['slots', 'layout']
 
 const KEY_EXPLORER_WIDTH = 'chat-workspace-width-px'
 const MIN_W = 220
@@ -23,15 +23,13 @@ const STEP_W = 40
 const DEFAULT_W = 260
 
 export function apply(ctx) {
-  ctx.inject(['slots'], (scope) => {
-    const layout = scope.get('layout')
-    scope.slots.inject('sidebar.footer.action', () =>
-      scope.slots.register(
-        { name: 'sidebar.footer.action', id: 'panel-controls', order: 90, label: 'Workspaces' },
-        (props) => React.createElement(PanelControls, { layout, wide: props.wide }),
-      ),
-    )
-  })
+  const layout = ctx.layout
+  ctx.slots.inject('sidebar.footer.action', () =>
+    ctx.slots.register(
+      { name: 'sidebar.footer.action', id: 'panel-controls', order: 90, label: 'Workspaces' },
+      (props) => React.createElement(PanelControls, { layout, wide: props.wide }),
+    ),
+  )
 }
 
 function readWidth() {
