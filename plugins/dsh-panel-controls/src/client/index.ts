@@ -1,16 +1,13 @@
 /**
  * dsh-panel-controls — browser half.
  *
- * A compact control in the sidebar foot ("beside Settings") that lets you:
- *  - Toggle "Focus workspaces": flips the dsh-aionui-panel `enabled` setting
- *    live — hides the whole Files/Preview/SCM panel group so the workspaces /
- *    chat column grows, and toggles back.
+ * A compact control in the sidebar foot that lets you:
+ *  - Toggle the workspaces (left) area: calls the frame's `layout.toggleSidebar()`
+ *    so the workspaces/session list expands to fill the left panel (or collapses
+ *    to the rail) — enough room to see the workspaces listing on mobile.
  *  - Resize the Files (Explorer) width via -/+ (writes the
  *    `chat-workspace-width-px` preference; the aionui-panel re-reads it on its
  *    next init/reload).
- *
- * The aionui-panel itself keeps the width in a private store, so in-page live
- * resize of the Files panel is only via its own drag handle / collapse chevron.
  */
 
 import React from 'react'
@@ -19,7 +16,6 @@ export const name = 'dsh-panel-controls'
 
 export const inject = ['slots']
 
-const PANEL_NS = 'aionui-panel'
 const KEY_EXPLORER_WIDTH = 'chat-workspace-width-px'
 const MIN_W = 220
 const MAX_W = 500
@@ -28,11 +24,11 @@ const DEFAULT_W = 260
 
 export function apply(ctx) {
   ctx.inject(['slots'], (scope) => {
-    const binder = scope.get('webUiSettings') ?? scope.get('settingsScope')
+    const layout = scope.get('layout')
     scope.slots.inject('sidebar.footer.action', () =>
       scope.slots.register(
-        { name: 'sidebar.footer.action', id: 'panel-controls', order: 90, label: 'Workspaces focus' },
-        (props) => React.createElement(PanelControls, { binder, wide: props.wide }),
+        { name: 'sidebar.footer.action', id: 'panel-controls', order: 90, label: 'Workspaces' },
+        (props) => React.createElement(PanelControls, { layout, wide: props.wide }),
       ),
     )
   })
@@ -52,22 +48,11 @@ function writeWidth(value) {
 }
 
 function PanelControls(props) {
-  const binder = props.binder
+  const layout = props.layout
   const [width, setWidth] = React.useState(readWidth)
-  const [focus, setFocus] = React.useState(false)
 
-  const setEnabled = (enabled) => {
-    if (binder === undefined) return
-    try {
-      const bound = typeof binder.bind === 'function' ? binder.bind({ namespace: PANEL_NS }) : binder
-      if (bound !== undefined && typeof bound.set === 'function') bound.set('enabled', enabled)
-    } catch { /* live toggle is best-effort */ }
-  }
-
-  const toggleFocus = () => {
-    const next = !focus
-    setFocus(next)
-    setEnabled(!next) // focus ON -> panels OFF (enabled=false), so workspaces grow
+  const toggleSidebar = () => {
+    if (layout !== undefined && typeof layout.toggleSidebar === 'function') layout.toggleSidebar()
   }
 
   const nudge = (delta) => setWidth(writeWidth(readWidth() + delta))
@@ -81,7 +66,7 @@ function PanelControls(props) {
   return React.createElement(
     'div',
     { style: { display: 'flex', gap: '4px', alignItems: 'center', fontSize: '12px' } },
-    button(focus ? '◱' : '◻', toggleFocus, 'Focus workspaces — hide the Files/Preview/SCM panels so the workspaces/chat grow (toggle back)', focus),
+    button('⇤⇥', toggleSidebar, 'Toggle the workspaces (left) area — expand it to fill the left panel (mobile-friendly) or collapse to the rail', false),
     button('−', () => nudge(-STEP_W), 'Shrink Files panel width', false),
     React.createElement('span', { style: { minWidth: '26px', textAlign: 'center' } }, String(width)),
     button('+', () => nudge(STEP_W), 'Grow Files panel width', false),
