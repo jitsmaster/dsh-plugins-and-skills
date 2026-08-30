@@ -1,0 +1,6 @@
+# dsh-panel-controls bundle patch: insert the plugin row.
+# Host half = the package default export (lib/index.js, a no-op); the browser
+# half is loaded automatically from the package's `dsh.client` export.
+- insert:
+    - id: panel-controls
+      name: dsh-panel-controls

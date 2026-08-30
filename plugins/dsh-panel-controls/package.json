@@ -1,0 +1,45 @@
+{
+  "name": "dsh-panel-controls",
+  "version": "0.1.0",
+  "description": "Workspace/layout controls for the dsh web GUI: a one-click 'Workspaces focus' toggle that hides the Files/Preview/SCM panel group (so the workspaces/chat grow) and toggles it back, plus a Files-panel width control.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "panel",
+    "layout",
+    "workspaces",
+    "ui"
+  ],
+  "license": "MIT"
+}
