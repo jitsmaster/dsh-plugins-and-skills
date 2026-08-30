@@ -4,19 +4,44 @@ window.__ModuleLoader__.load({
 		var module = { exports: {} };
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+		//#region \0rolldown/runtime.js
+		var __create = Object.create;
+		var __defProp = Object.defineProperty;
+		var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+		var __getOwnPropNames = Object.getOwnPropertyNames;
+		var __getProtoOf = Object.getPrototypeOf;
+		var __hasOwnProp = Object.prototype.hasOwnProperty;
+		var __copyProps = (to, from, except, desc) => {
+			if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames(from), i = 0, n = keys.length, key; i < n; i++) {
+				key = keys[i];
+				if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
+					get: ((k) => from[k]).bind(null, key),
+					enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+				});
+			}
+			return to;
+		};
+		var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", {
+			value: mod,
+			enumerable: true
+		}) : target, mod));
+		//#endregion
+		let react = require("react");
+		react = __toESM(react, 1);
 		//#region ../../../../../dsh-system-work/dsh-plugins-and-skills/plugins/dsh-panel-controls/src/client/index.ts
 		/**
 		* dsh-panel-controls — browser half.
 		*
-		* A small control bar registered in the composer dock that lets you:
-		*  1. Toggle "Workspaces focus": flips the `dsh-aionui-panel` `enabled`
-		*     setting, which live unmounts/mounts the whole Files/Preview/SCM panel
-		*     group — so the workspaces/chat column grows to fill the frame.
-		*  2. Resize the Files (Explorer) panel width via +/- (writes the
-		*     `chat-workspace-width-px` preference; the panel re-reads it on its next
-		*     init/reload, since the aionui-panel keeps the width in a private store).
+		* A compact control in the sidebar foot ("beside Settings") that lets you:
+		*  - Toggle "Focus workspaces": flips the dsh-aionui-panel `enabled` setting
+		*    live — hides the whole Files/Preview/SCM panel group so the workspaces /
+		*    chat column grows, and toggles back.
+		*  - Resize the Files (Explorer) width via -/+ (writes the
+		*    `chat-workspace-width-px` preference; the aionui-panel re-reads it on its
+		*    next init/reload).
 		*
-		* All state is transient (in-memory / browser localStorage); no host service.
+		* The aionui-panel itself keeps the width in a private store, so in-page live
+		* resize of the Files panel is only via its own drag handle / collapse chevron.
 		*/
 		const name = "dsh-panel-controls";
 		const inject = ["slots"];
@@ -29,11 +54,15 @@ window.__ModuleLoader__.load({
 		function apply(ctx) {
 			ctx.inject(["slots"], (scope) => {
 				const binder = scope.get("webUiSettings") ?? scope.get("settingsScope");
-				scope.slots.inject("conversation.input.dock", () => scope.slots.register({
-					name: "conversation.input.dock",
-					id: "dsh-panel-controls",
-					order: 90
-				}, () => React.createElement(PanelControls, { binder })));
+				scope.slots.inject("sidebar.footer.action", () => scope.slots.register({
+					name: "sidebar.footer.action",
+					id: "panel-controls",
+					order: 90,
+					label: "Workspaces focus"
+				}, (props) => react.default.createElement(PanelControls, {
+					binder,
+					wide: props.wide
+				})));
 			});
 		}
 		function readWidth() {
@@ -53,8 +82,8 @@ window.__ModuleLoader__.load({
 		}
 		function PanelControls(props) {
 			const binder = props.binder;
-			const [width, setWidth] = React.useState(readWidth);
-			const [focus, setFocus] = React.useState(false);
+			const [width, setWidth] = react.default.useState(readWidth);
+			const [focus, setFocus] = react.default.useState(false);
 			const setEnabled = (enabled) => {
 				if (binder === void 0) return;
 				try {
@@ -67,38 +96,25 @@ window.__ModuleLoader__.load({
 				setFocus(next);
 				setEnabled(!next);
 			};
-			const nudge = (delta) => {
-				setWidth(writeWidth(readWidth() + delta));
-			};
-			return React.createElement("div", { style: {
+			const nudge = (delta) => setWidth(writeWidth(readWidth() + delta));
+			const button = (label, onClick, title, active) => react.default.createElement("button", {
+				onClick,
+				title,
+				style: {
+					cursor: "pointer",
+					padding: "2px 6px",
+					fontWeight: active ? 700 : 400
+				}
+			}, label);
+			return react.default.createElement("div", { style: {
 				display: "flex",
-				gap: "6px",
+				gap: "4px",
 				alignItems: "center",
-				padding: "2px 0",
 				fontSize: "12px"
-			} }, React.createElement("button", {
-				onClick: toggleFocus,
-				title: "Hide the Files/Preview/SCM panels so the workspaces grow (toggle back)",
-				style: {
-					cursor: "pointer",
-					padding: "2px 6px"
-				}
-			}, focus ? "Focus workspaces: ON" : "Focus workspaces"), React.createElement("span", { style: { opacity: .7 } }, "File width"), React.createElement("button", {
-				onClick: () => nudge(-40),
-				style: {
-					cursor: "pointer",
-					padding: "2px 6px"
-				}
-			}, "−"), React.createElement("span", { style: {
-				minWidth: "30px",
+			} }, button(focus ? "◱" : "◻", toggleFocus, "Focus workspaces — hide the Files/Preview/SCM panels so the workspaces/chat grow (toggle back)", focus), button("−", () => nudge(-40), "Shrink Files panel width", false), react.default.createElement("span", { style: {
+				minWidth: "26px",
 				textAlign: "center"
-			} }, String(width)), React.createElement("button", {
-				onClick: () => nudge(STEP_W),
-				style: {
-					cursor: "pointer",
-					padding: "2px 6px"
-				}
-			}, "+"));
+			} }, String(width)), button("+", () => nudge(STEP_W), "Grow Files panel width", false));
 		}
 		//#endregion
 		exports.apply = apply;

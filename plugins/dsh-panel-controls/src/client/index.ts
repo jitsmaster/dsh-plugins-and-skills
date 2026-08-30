@@ -1,16 +1,19 @@
 /**
  * dsh-panel-controls — browser half.
  *
- * A small control bar registered in the composer dock that lets you:
- *  1. Toggle "Workspaces focus": flips the `dsh-aionui-panel` `enabled`
- *     setting, which live unmounts/mounts the whole Files/Preview/SCM panel
- *     group — so the workspaces/chat column grows to fill the frame.
- *  2. Resize the Files (Explorer) panel width via +/- (writes the
- *     `chat-workspace-width-px` preference; the panel re-reads it on its next
- *     init/reload, since the aionui-panel keeps the width in a private store).
+ * A compact control in the sidebar foot ("beside Settings") that lets you:
+ *  - Toggle "Focus workspaces": flips the dsh-aionui-panel `enabled` setting
+ *    live — hides the whole Files/Preview/SCM panel group so the workspaces /
+ *    chat column grows, and toggles back.
+ *  - Resize the Files (Explorer) width via -/+ (writes the
+ *    `chat-workspace-width-px` preference; the aionui-panel re-reads it on its
+ *    next init/reload).
  *
- * All state is transient (in-memory / browser localStorage); no host service.
+ * The aionui-panel itself keeps the width in a private store, so in-page live
+ * resize of the Files panel is only via its own drag handle / collapse chevron.
  */
+
+import React from 'react'
 
 export const name = 'dsh-panel-controls'
 
@@ -26,10 +29,10 @@ const DEFAULT_W = 260
 export function apply(ctx) {
   ctx.inject(['slots'], (scope) => {
     const binder = scope.get('webUiSettings') ?? scope.get('settingsScope')
-    scope.slots.inject('conversation.input.dock', () =>
+    scope.slots.inject('sidebar.footer.action', () =>
       scope.slots.register(
-        { name: 'conversation.input.dock', id: 'dsh-panel-controls', order: 90 },
-        () => React.createElement(PanelControls, { binder }),
+        { name: 'sidebar.footer.action', id: 'panel-controls', order: 90, label: 'Workspaces focus' },
+        (props) => React.createElement(PanelControls, { binder, wide: props.wide }),
       ),
     )
   })
@@ -56,36 +59,31 @@ function PanelControls(props) {
   const setEnabled = (enabled) => {
     if (binder === undefined) return
     try {
-      const bound = typeof binder.bind === 'function'
-        ? binder.bind({ namespace: PANEL_NS })
-        : binder
-      if (bound !== undefined && typeof bound.set === 'function') {
-        bound.set('enabled', enabled)
-      }
+      const bound = typeof binder.bind === 'function' ? binder.bind({ namespace: PANEL_NS }) : binder
+      if (bound !== undefined && typeof bound.set === 'function') bound.set('enabled', enabled)
     } catch { /* live toggle is best-effort */ }
   }
 
   const toggleFocus = () => {
     const next = !focus
     setFocus(next)
-    setEnabled(!next) // focus ON -> panels OFF (enabled=false)
+    setEnabled(!next) // focus ON -> panels OFF (enabled=false), so workspaces grow
   }
 
-  const nudge = (delta) => {
-    setWidth(writeWidth(readWidth() + delta))
-  }
+  const nudge = (delta) => setWidth(writeWidth(readWidth() + delta))
+
+  const button = (label, onClick, title, active) => React.createElement(
+    'button',
+    { onClick, title, style: { cursor: 'pointer', padding: '2px 6px', fontWeight: active ? 700 : 400 } },
+    label,
+  )
 
   return React.createElement(
     'div',
-    { style: { display: 'flex', gap: '6px', alignItems: 'center', padding: '2px 0', fontSize: '12px' } },
-    React.createElement(
-      'button',
-      { onClick: toggleFocus, title: 'Hide the Files/Preview/SCM panels so the workspaces grow (toggle back)', style: { cursor: 'pointer', padding: '2px 6px' } },
-      focus ? 'Focus workspaces: ON' : 'Focus workspaces',
-    ),
-    React.createElement('span', { style: { opacity: 0.7 } }, 'File width'),
-    React.createElement('button', { onClick: () => nudge(-STEP_W), style: { cursor: 'pointer', padding: '2px 6px' } }, '−'),
-    React.createElement('span', { style: { minWidth: '30px', textAlign: 'center' } }, String(width)),
-    React.createElement('button', { onClick: () => nudge(STEP_W), style: { cursor: 'pointer', padding: '2px 6px' } }, '+'),
+    { style: { display: 'flex', gap: '4px', alignItems: 'center', fontSize: '12px' } },
+    button(focus ? '◱' : '◻', toggleFocus, 'Focus workspaces — hide the Files/Preview/SCM panels so the workspaces/chat grow (toggle back)', focus),
+    button('−', () => nudge(-STEP_W), 'Shrink Files panel width', false),
+    React.createElement('span', { style: { minWidth: '26px', textAlign: 'center' } }, String(width)),
+    button('+', () => nudge(STEP_W), 'Grow Files panel width', false),
   )
 }
